@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Scheduler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #FF6B6B, #FFA500); /* Hot Pink to Orange Gradient */
+        }
+
+        /* Custom Slider Styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            outline: none;
+            transition: opacity .2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #FFFFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 4px solid #FF6B6B;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #FFFFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 4px solid #FF6B6B;
+        }
+
+        input[type="range"]:disabled::-webkit-slider-thumb {
+            background: #9ca3af;
+            border-color: #6b7280;
+        }
+        
+        .toggle-label {
+            transition: all 0.3s ease;
+        }
+
+        .toggle-label.active {
+             background-color: #FF6B6B;
+             color: white;
+             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md mx-auto bg-white/20 backdrop-blur-lg rounded-3xl shadow-2xl p-6 md:p-8 text-white">
+        
+        <h1 class="text-3xl font-extrabold text-center mb-2">Split Your Payment</h1>
+        <p class="text-center text-white/80 mb-6">Organise how you pay it back.</p>
+
+        <!-- Amount Input -->
+        <div class="mb-6">
+            <label for="totalAmount" class="block text-sm font-bold mb-2">Total Amount (£)</label>
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-white/60">£</span>
+                <input type="number" id="totalAmount" value="100.00" step="0.01" class="w-full bg-white/20 placeholder-white/50 text-white font-bold rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-white/50">
+            </div>
+        </div>
+
+        <!-- Period Toggle -->
+        <div class="mb-6">
+            <label class="block text-sm font-bold mb-2">Repayment Period</label>
+            <div class="flex bg-white/20 rounded-xl p-1">
+                <button id="toggleWeeks" class="toggle-label w-1/2 rounded-lg py-2 text-center font-bold active">Weeks</button>
+                <button id="toggleMonths" class="toggle-label w-1/2 rounded-lg py-2 text-center font-bold">Months</button>
+            </div>
+        </div>
+
+        <!-- Period Slider -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-2">
+                <label for="installments" id="sliderLabel" class="text-sm font-bold">Number of Weeks</label>
+                <span id="sliderValue" class="font-extrabold text-xl bg-white/20 px-3 py-1 rounded-lg">4</span>
+            </div>
+            <input type="range" id="installments" min="2" max="104" value="4" class="w-full">
+        </div>
+        
+        <!-- Error Message Container -->
+        <div id="errorMessage" class="bg-yellow-500/50 text-white text-center p-3 rounded-xl mb-6 hidden">
+            <!-- JS will populate this -->
+        </div>
+
+        <!-- Payment Display -->
+        <div id="paymentDisplayContainer" class="grid grid-cols-2 gap-4 mb-8 text-center">
+            <div>
+                <p class="text-sm font-bold text-white/80 mb-1">Regular Payment</p>
+                <p id="regularPayment" class="text-3xl font-extrabold">£26.00</p>
+            </div>
+            <div>
+                <p class="text-sm font-bold text-white/80 mb-1">Final Payment</p>
+                <p id="finalPayment" class="text-3xl font-extrabold">£22.00</p>
+            </div>
+        </div>
+        
+        <!-- Schedule Breakdown -->
+        <div id="scheduleDetails" class="bg-white/10 rounded-xl p-4 space-y-2">
+            <!-- JS will populate this -->
+        </div>
+
+    </div>
+
+    <script>
+        // --- DOM ELEMENTS ---
+        const totalAmountInput = document.getElementById('totalAmount');
+        const installmentsSlider = document.getElementById('installments');
+        const sliderLabel = document.getElementById('sliderLabel');
+        const sliderValue = document.getElementById('sliderValue');
+        const toggleWeeksBtn = document.getElementById('toggleWeeks');
+        const toggleMonthsBtn = document.getElementById('toggleMonths');
+        const regularPaymentEl = document.getElementById('regularPayment');
+        const finalPaymentEl = document.getElementById('finalPayment');
+        const scheduleDetailsEl = document.getElementById('scheduleDetails');
+        const errorMessageEl = document.getElementById('errorMessage');
+        const paymentDisplayContainer = document.getElementById('paymentDisplayContainer');
+
+        // --- STATE ---
+        let state = {
+            totalAmount: 100,
+            installments: 4,
+            period: 'Weeks' // 'Weeks' or 'Months'
+        };
+
+        // --- VALIDATION & CALCULATION LOGIC ---
+        
+        /**
+         * Calculates the maximum valid number of installments for a given amount and period limit.
+         * @param {number} totalAmount - The total amount to be paid.
+         * @param {number} maxN - The maximum number of installments to check (e.g., 104 for weeks).
+         * @returns {number} The maximum number of installments, or 0 if none are valid.
+         */
+        function calculateMaxInstallments(totalAmount, maxN) {
+            // Check from the period's limit (maxN) downwards.
+            for (let n = maxN; n >= 2; n--) {
+                // To have a valid schedule, we need to find an integer Regular Payment (R) that satisfies two conditions:
+                // 1. R > totalAmount / n  (ensures final payment is less than regular payment)
+                // 2. R <= totalAmount / (n - 1) (ensures final payment is not negative)
+                
+                const minR = Math.floor(totalAmount / n) + 1;
+
+                if (minR >= 1 && minR <= totalAmount / (n - 1)) {
+                    return n; 
+                }
+            }
+            return 0; // No valid installment options for n >= 2 were found.
+        }
+
+
+        /**
+         * Calculates the regular and final payment amounts based on valid inputs.
+         * @param {number} totalAmount - The total amount.
+         * @param {number} installments - The number of installments.
+         * @returns {{regularPayment: number, finalPayment: number}}
+         */
+        function calculateSchedule(totalAmount, installments) {
+            if (installments <= 1 || totalAmount <= 0) {
+                return { regularPayment: totalAmount, finalPayment: 0 };
+            }
+            const regularPayment = Math.floor(totalAmount / installments) + 1;
+            const finalPayment = totalAmount - (regularPayment * (installments - 1));
+            return { regularPayment, finalPayment };
+        }
+
+        // --- UI UPDATE FUNCTIONS ---
+
+        /**
+         * Main UI update function. Assumes inputs are valid.
+         */
+        function updateUI() {
+            const { totalAmount, installments, period } = state;
+            const schedule = calculateSchedule(totalAmount, installments);
+
+            regularPaymentEl.textContent = formatCurrency(schedule.regularPayment);
+            finalPaymentEl.textContent = formatCurrency(schedule.finalPayment);
+            sliderValue.textContent = installments;
+            sliderLabel.textContent = `Number of ${period}`;
+            
+            generateScheduleDetails(schedule, installments, period);
+        }
+        
+        /**
+         * Checks for valid options based on total amount and updates slider/UI accordingly.
+         */
+        function updateInstallmentOptions() {
+            const totalAmount = state.totalAmount;
+            const maxN = state.period === 'Weeks' ? 104 : 24;
+            const maxInstallments = calculateMaxInstallments(totalAmount, maxN);
+
+            if (maxInstallments < 2) {
+                // No valid schedule is possible. Disable controls.
+                installmentsSlider.disabled = true;
+                errorMessageEl.textContent = "A payment plan of 2 or more installments is not possible for this amount.";
+                errorMessageEl.classList.remove('hidden');
+                paymentDisplayContainer.classList.add('hidden');
+                scheduleDetailsEl.classList.add('hidden');
+                sliderValue.textContent = '-';
+            } else {
+                // A valid schedule is possible. Enable controls.
+                installmentsSlider.disabled = false;
+                installmentsSlider.max = maxInstallments;
+                errorMessageEl.classList.add('hidden');
+                paymentDisplayContainer.classList.remove('hidden');
+                scheduleDetailsEl.classList.remove('hidden');
+
+                // If current selection is now invalid, adjust it.
+                if (state.installments > maxInstallments) {
+                    state.installments = maxInstallments;
+                    installmentsSlider.value = maxInstallments;
+                }
+                updateUI(); // Perform the main UI update.
+            }
+        }
+
+        function generateScheduleDetails(schedule, installments, period) {
+            scheduleDetailsEl.innerHTML = ''; // Clear previous details
+            
+            for (let i = 1; i < installments; i++) {
+                const li = document.createElement('div');
+                li.className = 'flex justify-between items-center text-sm';
+                li.innerHTML = `<span>${period.slice(0, -1)} ${i} Payment:</span> <span class="font-bold">${formatCurrency(schedule.regularPayment)}</span>`;
+                scheduleDetailsEl.appendChild(li);
+            }
+
+            const finalLi = document.createElement('div');
+            finalLi.className = 'flex justify-between items-center text-sm font-bold pt-2 border-t border-white/20';
+            finalLi.innerHTML = `<span>Final Payment (${period.slice(0, -1)} ${installments}):</span> <span class="text-lg">${formatCurrency(schedule.finalPayment)}</span>`;
+            scheduleDetailsEl.appendChild(finalLi);
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+        }
+
+        // --- EVENT LISTENERS ---
+        totalAmountInput.addEventListener('input', (e) => {
+            state.totalAmount = parseFloat(e.target.value) || 0;
+            updateInstallmentOptions();
+        });
+
+        installmentsSlider.addEventListener('input', (e) => {
+            state.installments = parseInt(e.target.value, 10);
+            updateUI(); // Just update UI, as options are already validated.
+        });
+
+        toggleWeeksBtn.addEventListener('click', () => {
+            if (state.period !== 'Weeks') {
+                state.period = 'Weeks';
+                toggleWeeksBtn.classList.add('active');
+                toggleMonthsBtn.classList.remove('active');
+                updateInstallmentOptions();
+            }
+        });
+
+        toggleMonthsBtn.addEventListener('click', () => {
+            if (state.period !== 'Months') {
+                state.period = 'Months';
+                toggleMonthsBtn.classList.add('active');
+                toggleWeeksBtn.classList.remove('active');
+                updateInstallmentOptions();
+            }
+        });
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', updateInstallmentOptions);
+
+    </script>
+</body>
+</html>
