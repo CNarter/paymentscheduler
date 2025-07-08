@@ -64,24 +64,24 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div class="w-full max-w-md mx-auto bg-white/20 backdrop-blur-lg rounded-3xl shadow-2xl p-6 md:p-8 text-white">
+    <div class="w-full max-w-md mx-auto bg-white/30 backdrop-blur-lg rounded-3xl shadow-2xl p-6 md:p-8 text-slate-800">
         
-        <h1 class="text-3xl font-extrabold text-center mb-2">Split Your Payment</h1>
-        <p class="text-center text-white/80 mb-6">Organise how you pay it back.</p>
+        <h1 class="text-3xl font-extrabold text-center mb-2 text-slate-900">Split Your Payment</h1>
+        <p class="text-center text-slate-600 mb-6">Organise how you pay it back.</p>
 
         <!-- Amount Input -->
         <div class="mb-6">
             <label for="totalAmount" class="block text-sm font-bold mb-2">Total Amount (£)</label>
             <div class="relative">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-white/60">£</span>
-                <input type="number" id="totalAmount" value="100.00" step="0.01" class="w-full bg-white/20 placeholder-white/50 text-white font-bold rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-white/50">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">£</span>
+                <input type="number" id="totalAmount" value="100.00" step="0.01" class="w-full bg-white/40 placeholder-slate-500 text-slate-900 font-bold rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-white/80">
             </div>
         </div>
 
         <!-- Period Toggle -->
         <div class="mb-6">
             <label class="block text-sm font-bold mb-2">Repayment Period</label>
-            <div class="flex bg-white/20 rounded-xl p-1">
+            <div class="flex bg-white/30 rounded-xl p-1">
                 <button id="toggleWeeks" class="toggle-label w-1/2 rounded-lg py-2 text-center font-bold active">Weeks</button>
                 <button id="toggleMonths" class="toggle-label w-1/2 rounded-lg py-2 text-center font-bold">Months</button>
             </div>
@@ -91,30 +91,30 @@
         <div class="mb-8">
             <div class="flex justify-between items-center mb-2">
                 <label for="installments" id="sliderLabel" class="text-sm font-bold">Number of Weeks</label>
-                <span id="sliderValue" class="font-extrabold text-xl bg-white/20 px-3 py-1 rounded-lg">4</span>
+                <span id="sliderValue" class="font-extrabold text-xl bg-white/30 px-3 py-1 rounded-lg">4</span>
             </div>
             <input type="range" id="installments" min="2" max="104" value="4" class="w-full">
         </div>
         
         <!-- Error Message Container -->
-        <div id="errorMessage" class="bg-yellow-500/50 text-white text-center p-3 rounded-xl mb-6 hidden">
+        <div id="errorMessage" class="bg-red-500/80 text-white text-center p-3 rounded-xl mb-6 hidden">
             <!-- JS will populate this -->
         </div>
 
         <!-- Payment Display -->
-        <div id="paymentDisplayContainer" class="grid grid-cols-2 gap-4 mb-8 text-center">
+        <div id="paymentDisplayContainer" class="grid grid-cols-2 gap-4 mb-8 text-center transition-opacity duration-300">
             <div>
-                <p class="text-sm font-bold text-white/80 mb-1">Regular Payment</p>
-                <p id="regularPayment" class="text-3xl font-extrabold">£26.00</p>
+                <p class="text-sm font-bold text-slate-600 mb-1">Regular Payment</p>
+                <p id="regularPayment" class="text-3xl font-extrabold text-slate-900">£26.00</p>
             </div>
             <div>
-                <p class="text-sm font-bold text-white/80 mb-1">Final Payment</p>
-                <p id="finalPayment" class="text-3xl font-extrabold">£22.00</p>
+                <p class="text-sm font-bold text-slate-600 mb-1">Final Payment</p>
+                <p id="finalPayment" class="text-3xl font-extrabold text-slate-900">£22.00</p>
             </div>
         </div>
         
         <!-- Schedule Breakdown -->
-        <div id="scheduleDetails" class="bg-white/10 rounded-xl p-4 space-y-2">
+        <div id="scheduleDetails" class="bg-white/20 rounded-xl p-4 space-y-2 transition-opacity duration-300">
             <!-- JS will populate this -->
         </div>
 
@@ -144,90 +144,120 @@
         // --- VALIDATION & CALCULATION LOGIC ---
         
         /**
-         * Calculates the maximum valid number of installments for a given amount and period limit.
-         * @param {number} totalAmount - The total amount to be paid.
-         * @param {number} maxN - The maximum number of installments to check (e.g., 104 for weeks).
-         * @returns {number} The maximum number of installments, or 0 if none are valid.
+         * Checks if a specific number of installments is valid for a given amount.
+         * @param {number} totalInPence - The total amount in pence.
+         * @param {number} n - The number of installments to check.
+         * @returns {boolean} - True if the schedule is valid, false otherwise.
          */
-        function calculateMaxInstallments(totalAmount, maxN) {
-            // Check from the period's limit (maxN) downwards.
-            for (let n = maxN; n >= 2; n--) {
-                // To have a valid schedule, we need to find an integer Regular Payment (R) that satisfies two conditions:
-                // 1. R > totalAmount / n  (ensures final payment is less than regular payment)
-                // 2. R <= totalAmount / (n - 1) (ensures final payment is not negative)
-                
-                const minR = Math.floor(totalAmount / n) + 1;
+        function isScheduleValid(totalInPence, n) {
+            if (n < 2 || totalInPence < 101) return false;
 
-                if (minR >= 1 && minR <= totalAmount / (n - 1)) {
-                    return n; 
-                }
-            }
-            return 0; // No valid installment options for n >= 2 were found.
+            // The rules require finding a regular payment R (a multiple of 100p) such that:
+            // totalInPence / n < R <= totalInPence / (n - 1)
+            const lowerBound = totalInPence / n;
+            const upperBound = totalInPence / (n - 1);
+
+            // Find the smallest possible R that is a multiple of 100p and is > lowerBound.
+            const smallestCandidateR_inPence = (Math.floor(lowerBound / 100) + 1) * 100;
+
+            // Check if this candidate R is valid:
+            // 1. It must be at least £1 (100p).
+            // 2. It must be within our allowed range (<= upperBound), which guarantees the final payment is not negative.
+            return smallestCandidateR_inPence >= 100 && smallestCandidateR_inPence <= upperBound;
         }
 
+        /**
+         * Calculates the maximum possible valid number of installments.
+         * @param {number} totalInPence - The total amount in pence.
+         * @param {number} maxN - The maximum number of installments to check.
+         * @returns {number} The maximum valid number of installments.
+         */
+        function findMaxPossibleInstallments(totalInPence, maxN) {
+            for (let n = maxN; n >= 2; n--) {
+                if (isScheduleValid(totalInPence, n)) {
+                    return n; // Return the first valid number found when searching downwards.
+                }
+            }
+            return 0; // No valid schedule found.
+        }
 
         /**
-         * Calculates the regular and final payment amounts based on valid inputs.
-         * @param {number} totalAmount - The total amount.
+         * Calculates the regular and final payment amounts.
+         * @param {number} totalInPence - The total amount in pence.
          * @param {number} installments - The number of installments.
-         * @returns {{regularPayment: number, finalPayment: number}}
+         * @returns {{regularPayment: number, finalPayment: number}} - Amounts in pounds.
          */
-        function calculateSchedule(totalAmount, installments) {
-            if (installments <= 1 || totalAmount <= 0) {
-                return { regularPayment: totalAmount, finalPayment: 0 };
-            }
-            const regularPayment = Math.floor(totalAmount / installments) + 1;
-            const finalPayment = totalAmount - (regularPayment * (installments - 1));
-            return { regularPayment, finalPayment };
+        function calculateSchedule(totalInPence, installments) {
+            const regularPaymentInPence = (Math.floor(totalInPence / installments / 100) + 1) * 100;
+            const finalPaymentInPence = totalInPence - (regularPaymentInPence * (installments - 1));
+            return { 
+                regularPayment: regularPaymentInPence / 100, 
+                finalPayment: finalPaymentInPence / 100
+            };
         }
 
         // --- UI UPDATE FUNCTIONS ---
 
         /**
-         * Main UI update function. Assumes inputs are valid.
+         * Main UI update function. It now validates the current selection.
          */
         function updateUI() {
             const { totalAmount, installments, period } = state;
-            const schedule = calculateSchedule(totalAmount, installments);
+            const totalInPence = Math.round(totalAmount * 100);
+
+            // Update slider text regardless of validity
+            sliderValue.textContent = installments;
+            sliderLabel.textContent = `Number of ${period}`;
+
+            // *** NEW: Validate the CURRENT number of installments ***
+            if (!isScheduleValid(totalInPence, installments)) {
+                errorMessageEl.innerHTML = `A valid plan isn't possible for ${installments} ${period.toLowerCase()}.<br>We can't make the numbers work! Please select a different schedule.`;
+                errorMessageEl.classList.remove('hidden');
+                paymentDisplayContainer.classList.add('opacity-50');
+                scheduleDetailsEl.classList.add('opacity-50');
+                regularPaymentEl.textContent = '---';
+                finalPaymentEl.textContent = '---';
+                scheduleDetailsEl.innerHTML = `<p class="text-center text-slate-600/80">Try a different duration.</p>`;
+                return; // Stop processing
+            }
+
+            // If we get here, the selection is valid.
+            errorMessageEl.classList.add('hidden');
+            paymentDisplayContainer.classList.remove('opacity-50');
+            scheduleDetailsEl.classList.remove('opacity-50');
+
+            const schedule = calculateSchedule(totalInPence, installments);
 
             regularPaymentEl.textContent = formatCurrency(schedule.regularPayment);
             finalPaymentEl.textContent = formatCurrency(schedule.finalPayment);
-            sliderValue.textContent = installments;
-            sliderLabel.textContent = `Number of ${period}`;
-            
             generateScheduleDetails(schedule, installments, period);
         }
         
         /**
-         * Checks for valid options based on total amount and updates slider/UI accordingly.
+         * Sets the slider's max value and updates the UI.
          */
-        function updateInstallmentOptions() {
+        function updateSliderAndUI() {
             const totalAmount = state.totalAmount;
+            const totalInPence = Math.round(totalAmount * 100);
             const maxN = state.period === 'Weeks' ? 104 : 24;
-            const maxInstallments = calculateMaxInstallments(totalAmount, maxN);
+            const maxInstallments = findMaxPossibleInstallments(totalInPence, maxN);
 
             if (maxInstallments < 2) {
-                // No valid schedule is possible. Disable controls.
                 installmentsSlider.disabled = true;
                 errorMessageEl.textContent = "A payment plan of 2 or more installments is not possible for this amount.";
                 errorMessageEl.classList.remove('hidden');
-                paymentDisplayContainer.classList.add('hidden');
-                scheduleDetailsEl.classList.add('hidden');
+                paymentDisplayContainer.classList.add('opacity-50');
+                scheduleDetailsEl.classList.add('opacity-50');
                 sliderValue.textContent = '-';
             } else {
-                // A valid schedule is possible. Enable controls.
                 installmentsSlider.disabled = false;
                 installmentsSlider.max = maxInstallments;
-                errorMessageEl.classList.add('hidden');
-                paymentDisplayContainer.classList.remove('hidden');
-                scheduleDetailsEl.classList.remove('hidden');
-
-                // If current selection is now invalid, adjust it.
+                
                 if (state.installments > maxInstallments) {
                     state.installments = maxInstallments;
                     installmentsSlider.value = maxInstallments;
                 }
-                updateUI(); // Perform the main UI update.
+                updateUI();
             }
         }
 
@@ -242,7 +272,7 @@
             }
 
             const finalLi = document.createElement('div');
-            finalLi.className = 'flex justify-between items-center text-sm font-bold pt-2 border-t border-white/20';
+            finalLi.className = 'flex justify-between items-center text-sm font-bold pt-2 border-t border-slate-400/30';
             finalLi.innerHTML = `<span>Final Payment (${period.slice(0, -1)} ${installments}):</span> <span class="text-lg">${formatCurrency(schedule.finalPayment)}</span>`;
             scheduleDetailsEl.appendChild(finalLi);
         }
@@ -255,12 +285,12 @@
         // --- EVENT LISTENERS ---
         totalAmountInput.addEventListener('input', (e) => {
             state.totalAmount = parseFloat(e.target.value) || 0;
-            updateInstallmentOptions();
+            updateSliderAndUI();
         });
 
         installmentsSlider.addEventListener('input', (e) => {
             state.installments = parseInt(e.target.value, 10);
-            updateUI(); // Just update UI, as options are already validated.
+            updateUI();
         });
 
         toggleWeeksBtn.addEventListener('click', () => {
@@ -268,7 +298,7 @@
                 state.period = 'Weeks';
                 toggleWeeksBtn.classList.add('active');
                 toggleMonthsBtn.classList.remove('active');
-                updateInstallmentOptions();
+                updateSliderAndUI();
             }
         });
 
@@ -277,13 +307,14 @@
                 state.period = 'Months';
                 toggleMonthsBtn.classList.add('active');
                 toggleWeeksBtn.classList.remove('active');
-                updateInstallmentOptions();
+                updateSliderAndUI();
             }
         });
 
         // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', updateInstallmentOptions);
+        document.addEventListener('DOMContentLoaded', updateSliderAndUI);
 
     </script>
 </body>
 </html>
+
